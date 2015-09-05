@@ -18,23 +18,25 @@
  *
  * MACRO()
  *
- * ACTION_FUNCTION(id, opt)
- * Not sure how it's different from ACTION_FUNCTION_TAP
+ * ACTION_FUNCTION(id)
+ * ACTION_FUNCTION_TAP(id)
+ * Both should be handled in the callback action_function, with the second define you
+ * have the possibility to define a dual role key (i.e. discriminate between tap and hold).
  *
  */
 static const uint8_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     /* Layer 0:
-     * ,-----------------------------------------------.           ,----------------------------------------------------.
-     * |   Esc   |  1  |  2  |  3  |  4   |  5  |   6  |           |   7  |   8   | Left  | Down  |  Up |Right |   \|   |
-     * |---------+-----+-----+-----+------+------------|           |------+-------+-------+-------+-----+------+--------|
-     * |   Tab   |  Q  |  F  |  W  |  R   |  Y  | Home |           | End  |  `~   |   H   |   J   |  K  |   L  |  PgUp  |
-     * |---------+-----+-----+-----+------+-----|      |           |      |-------+-------+-------+-----+------+--------|
-     * |    -_   |  A  |  S  |  D  |  G   |  X  |------|           |------|  ,<   |   C   |   E   |  I  |   O  |  PgDwn |
-     * |---------+-----+-----+-----+------+-----|  [{  |           |  ]}  |-------+-------+-------+-----+------+--------|
-     * | LShift  |  Z  |  T  |  M  |  B   |  V  |      |           |      |  /?   |   N   |   P   | .>  |   U  |=+/RShft|
-     * `---------+-----+-----+-----+------+------------'           `--------------+-------+-------+-----+------+--------'
-     *  | LCtrl  |RAlt | LAlt| ~L1 | Bksp |                                       | Space |;:/LAlt| '"  |   9  |   0  |
-     *  `---------------------------------'                                       `-----------------------------------'
+     * ,-----------------------------------------------.           ,-----------------------------------------------------.
+     * |   Esc   |  1  |  2  |  3  |  4   |  5  |   6  |           |   7  |   8   | Left  | Down  |  Up | Right |   \|   |
+     * |---------+-----+-----+-----+------+------------|           |------+-------+-------+-------+-----+-------+--------|
+     * |   Tab   |  Q  |  F  |  W  |  R   |  Y  | Home |           | End  |  `~   |   H   |   J   |  K  |   L   |  PgUp  |
+     * |---------+-----+-----+-----+------+-----|      |           |      |-------+-------+-------+-----+-------+--------|
+     * |    -_   |  A  |  S  |  D  |  G   |  X  |------|           |------|  ,<   |   C   |   E   |  I  |   O   |  PgDwn |
+     * |---------+-----+-----+-----+------+-----|  [{  |           |  ]}  |-------+-------+-------+-----+-------+--------|
+     * | LShift  |  Z  |  T  |  M  |  B   |  V  |      |           |      |  /?   |   N   |   P   | .>  |   U   |=+/RShft|
+     * `---------+-----+-----+-----+------+------------'           `--------------+-------+-------+-----+-------+--------'
+     *  | LCtrl  |RAlt | LAlt| ~L1 |Bksp/Del|                                     | Space |;:/LAlt| '"  |   9   |   0   |
+     *  `-----------------------------------'                                     `-------------------------------------'
      *                                        ,-------------.       ,-------------.
      *                                        |  F2  | LGui |       |  L1  |  F1  |
      *                                 ,------|------|------|       |------+------+------.
@@ -69,7 +71,7 @@ static const uint8_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         TAB,    Q,     F,     W,      R,   Y,  HOME,
        MINS,    A,     S,     D,      G,   X,
      LSHIFT,    Z,     T,     M,      B,   V,  LBRC,
-      LCTRL, RALT,  LALT,   FN2,   BSPC,
+      LCTRL, RALT,  LALT,   FN2,    FN7,
 
                                          F2, LGUI,
                                              FN11,
@@ -111,8 +113,8 @@ static const uint8_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 /* id for user defined functions & macros */
 enum function_id {
     TEENSY_KEY,
-    CUSTOM_KEY,
     CTRLC_AND_LALT,
+    BACKSPACE_AND_DEL_WITH_SHIFT,
 };
 
 enum macro_id {
@@ -131,7 +133,7 @@ static const uint16_t PROGMEM fn_actions[] = {
     [4] =  ACTION_MACRO(CTRLV),
     [5] =  ACTION_MODS_TAP_KEY(MOD_RSFT, KC_EQUAL),
     [6] =  ACTION_MODS_TAP_KEY(MOD_RCTL, KC_ENT),
-    //[7] =  ACTION_MODS_TAP_KEY(MOD_RALT, KC_SLSH),
+    [7] =  ACTION_FUNCTION(BACKSPACE_AND_DEL_WITH_SHIFT),
     [8] =  ACTION_MACRO(CTRLC),
     //[9] =  ACTION_LAYER_TAP_KEY(1, KC_N),
     [10] = ACTION_MACRO(SHIFTINS),
@@ -157,36 +159,61 @@ void action_function(keyrecord_t *record, uint8_t id, uint8_t opt)
     // print("id  = "); phex(id); print("\n");
     // print("opt = "); phex(opt); print("\n");
 
-    if (id == TEENSY_KEY) {
+    static uint8_t either_ctrl_is_on;
+    switch (id) {
+      case TEENSY_KEY:
         clear_keyboard();
         print("\n\nJump to bootloader... ");
         _delay_ms(50);
         bootloader_jump(); // should not return
         print("not supported.\n");
-    }
-
-    if (id == CTRLC_AND_LALT) {
-      if (record->event.pressed) {
-        if (record->tap.count > 0 && !record->tap.interrupted) {
-          if (record->tap.interrupted) {
+        break;
+      case CTRLC_AND_LALT:
+        if (record->event.pressed) {
+          if (record->tap.count > 0 && !record->tap.interrupted) {
+            //if (record->tap.interrupted) {
+              //register_mods(MOD_BIT(KC_LALT));
+            //}
+          } else {
             register_mods(MOD_BIT(KC_LALT));
           }
         } else {
-          register_mods(MOD_BIT(KC_LALT));
+          if (record->tap.count > 0 && !(record->tap.interrupted)) {
+            add_weak_mods(MOD_BIT(KC_LCTL));
+            send_keyboard_report();
+            register_code(KC_C);
+            unregister_code(KC_C);
+            del_weak_mods(MOD_BIT(KC_LCTL));
+            send_keyboard_report();
+            record->tap.count = 0;  // ad hoc: cancel tap
+          } else {
+            unregister_mods(MOD_BIT(KC_LALT));
+          }
         }
-      } else {
-        if (record->tap.count > 0 && !(record->tap.interrupted)) {
-          add_weak_mods(MOD_BIT(KC_LCTL));
-          send_keyboard_report();
-          register_code(KC_C);
-          unregister_code(KC_C);
-          del_weak_mods(MOD_BIT(KC_LCTL));
-          send_keyboard_report();
-          record->tap.count = 0;  // ad hoc: cancel tap
+        break;
+      case BACKSPACE_AND_DEL_WITH_SHIFT:
+#define MODS_CTRL_MASK (MOD_BIT(KC_LCTRL)|MOD_BIT(KC_RCTRL))
+        either_ctrl_is_on = get_mods()&MODS_CTRL_MASK;
+        if (record->event.pressed) {
+          if (either_ctrl_is_on) {
+            del_mods(either_ctrl_is_on);
+            add_key(KC_DELETE);
+            send_keyboard_report();
+            add_mods(either_ctrl_is_on);
+          } else {
+            add_key(KC_BSPACE);
+            send_keyboard_report();
+          }
         } else {
-          unregister_mods(MOD_BIT(KC_LALT));
+          if (either_ctrl_is_on) {
+            del_key(KC_DELETE);
+            send_keyboard_report();
+          } else {
+            del_key(KC_BSPACE);
+            send_keyboard_report();
+          }
         }
-      }
+        break;
     }
 }
 
